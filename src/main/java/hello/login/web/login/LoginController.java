@@ -1,7 +1,9 @@
-package hello.login.domain.login;
+package hello.login.web.login;
 
+import hello.login.domain.login.LoginService;
 import hello.login.domain.member.Member;
 import hello.login.web.login.LoginForm;
+import hello.login.web.session.SessionManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Controller;
@@ -11,6 +13,7 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
 
 import javax.servlet.http.Cookie;
+import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.validation.Valid;
 
@@ -19,13 +22,14 @@ import javax.validation.Valid;
 @RequiredArgsConstructor
 public class LoginController {
     private final LoginService loginService;
+    private final SessionManager sessionManager;
 
     @GetMapping("/login")
     public String loginForm(@ModelAttribute("loginForm") LoginForm form) {
         return "login/loginForm";
     }
 
-    @PostMapping("/login")
+    // @PostMapping("/login")
     public String login(@Valid @ModelAttribute LoginForm form, BindingResult bindingResult, HttpServletResponse response) {
         // 일반 검증 에러 발생시
         if(bindingResult.hasErrors()) {
@@ -51,9 +55,39 @@ public class LoginController {
         return "redirect:/";
     }
 
-    @PostMapping("/logout")
+    @PostMapping("/login")
+    public String loginV2(@Valid @ModelAttribute LoginForm form, BindingResult bindingResult, HttpServletResponse response) {
+        // 일반 검증 에러 발생시
+        if(bindingResult.hasErrors()) {
+            return "login/loginForm";
+        }
+
+        Member loginMember = loginService.login(form.getLoginId(), form.getPassword());
+        log.info("login? {}", loginMember);
+
+        // 로그인이 실패했을 때
+        // 로그인처럼 DB를 뒤지거나 하는 작업이 있을 때는
+        // Bean Validation 만으론 한계가 있기 때문에 이러한 검증 로직을 추가할 수 밖에 없다.
+        if(loginMember == null) {
+            bindingResult.reject("loginFail", "아이디 또는 비밀번호가 맞지 않습니다.");
+            return "login/loginForm";
+        }
+
+        // 세션 만들어줌, 해당 세션 키에 멤버 객체 보관
+        sessionManager.createSession(loginMember, response);
+
+        return "redirect:/";
+    }
+
+    // @PostMapping("/logout")
     public String logout(HttpServletResponse response) {
         expireCookie(response, "memberId");
+        return "redirect:/";
+    }
+
+    @PostMapping("/logout")
+    public String logoutV2(HttpServletRequest request) {
+        sessionManager.expire(request);
         return "redirect:/";
     }
 
