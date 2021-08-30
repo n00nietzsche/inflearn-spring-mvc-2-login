@@ -8,10 +8,12 @@ import hello.login.web.session.SessionManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Controller;
+import org.springframework.util.StringUtils;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 
 import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServletRequest;
@@ -81,7 +83,7 @@ public class LoginController {
         return "redirect:/";
     }
 
-    @PostMapping("/login")
+    // @PostMapping("/login")
     public String loginV3(@Valid @ModelAttribute LoginForm form, BindingResult bindingResult, HttpServletRequest request) {
         // 일반 검증 에러 발생시
         if(bindingResult.hasErrors()) {
@@ -104,7 +106,40 @@ public class LoginController {
         // 세션에 로그인 회원 정보 보관
         session.setAttribute(SessionConst.LOGIN_MEMBER, loginMember);
 
+        // redirectURL 파라미터 잡아서 있다면 원래 보던 페이지로 이동시켜주기
+        String redirectURL = request.getParameter("redirectURL");
+
+        if (StringUtils.hasText(redirectURL)) {
+            return "redirect:" + redirectURL;
+        }
+
         return "redirect:/";
+    }
+
+    @PostMapping("/login")
+    public String loginV4(@Valid @ModelAttribute LoginForm form, BindingResult bindingResult, HttpServletRequest request, @RequestParam(defaultValue = "/") String redirectURL) {
+        // 일반 검증 에러 발생시
+        if(bindingResult.hasErrors()) {
+            return "login/loginForm";
+        }
+
+        Member loginMember = loginService.login(form.getLoginId(), form.getPassword());
+        log.info("login? {}", loginMember);
+
+        // 로그인이 실패했을 때
+        // 로그인처럼 DB를 뒤지거나 하는 작업이 있을 때는
+        // Bean Validation 만으론 한계가 있기 때문에 이러한 검증 로직을 추가할 수 밖에 없다.
+        if(loginMember == null) {
+            bindingResult.reject("loginFail", "아이디 또는 비밀번호가 맞지 않습니다.");
+            return "login/loginForm";
+        }
+
+        // 세션이 있다면 있는 세션을 반환하고, 없다면 신규 세션을 만든다.
+        HttpSession session = request.getSession();
+        // 세션에 로그인 회원 정보 보관
+        session.setAttribute(SessionConst.LOGIN_MEMBER, loginMember);
+
+        return "redirect:" + redirectURL;
     }
 
     // @PostMapping("/logout")
